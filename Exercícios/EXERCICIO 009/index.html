@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mídias</title>
+</head>
+<body>
+    <h1>Imagens dinâmica</h1>
+    <P>Tente abrir esse site em diferentes dispositivos ou simplesmente aumente e diminua o tamanho do seu navegador</P>
+    
+    <picture>
+        <source media="(max-width: 750px)" srcset="imagens.png/foto-p.png" sizes="">
+        <source media="(max-width: 1050px)" srcset="imagens.png/foto-m.png" type="image/png">
+        <img src="imagens.png/foto-g.png" alt="Imagem flexível">
+    </picture>
+
+    <h2>Inserindo áudios no site</h2>
+    <audio src="audio.mp3.mp3" controls autoplay></audio>
+    <!--MP3 WAV OGG-->
+    <audio> 
+        <source srcset="audio.mp3.mp3" type="audio/mpeg">
+        
+    </audio>
+    <a href="audio.mp3.mp3" download="--MP3" type="mp3">clique aqui para baixar</a>
+
+    <h1>Inserindo vídeos hospedados localmente:</h1>
+    <p>Este vídeo está hospedado no meu <strong>servidor</strong>:</p>
+
+    <video width="500" poster="imagens.png/4.jpg" controls>
+        <source src="video.mph/13781927_3840_2160_30fps.mp4" type="video/mp4">
+
+    </video>
+
+    <h1>Inserindo vídeos do YouTube:</h1>
+    <iframe width="500" height="315" src="https://www.youtube.com/embed/_oD4Ml95MFs?si=S49J3J_TkvOzPCLa" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+
+
+</body>
+</html>

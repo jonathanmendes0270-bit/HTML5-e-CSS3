@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1a1a2e; overflow:hidden; font-family:monospace; }
+canvas { display:block; }
+#ui { position:absolute; top:10px; left:10px; color:#fff; font-size:14px; text-shadow:1px 1px 2px #000; }
+#msg { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-size:28px; font-weight:bold; text-align:center; text-shadow:2px 2px 4px #000; display:none; }
+#controls { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.6); font-size:12px; text-align:center; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div>❤️ Runner: <span id="hp">3</span></div>
+  <div>🎯 Balas: <span id="ammo">∞</span></div>
+  <div>📍 Progresso: <span id="prog">0%</span></div>
+</div>
+<div id="msg" id="msg"></div>
+<div id="controls">🖱️ Mira com mouse | Clique = Atirar | ESPAÇO = Pular</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+const W = canvas.width, H = canvas.height;
+
+// Game state
+let state = 'playing'; // playing, dead, win
+let mouse = {x: W/2, y: H/2};
+let shootCooldown = 0;
+let muzzleFlash = 0;
+let shakeX = 0, shakeY = 0;
+
+// World scroll
+let scrollX = 0;
+const WORLD_W = 6000;
+
+// Runner
+let runner = {
+  x: 200, y: 0, vy: 0, vx: 2.2,
+  w: 22, h: 32, hp: 3,
+  grounded: false,
+  frame: 0, frameTimer: 0,
+  dead: false, deadTimer: 0,
+  hitFlash: 0
+};
+
+// Platforms
+let platforms = [
+  {x:0, y:H*0.65, w:400, h:20},
+  {x:450, y:H*0.65, w:200, h:20},
+  {x:700, y:H*0.55, w:180, h:20},
+  {x:950, y:H*0.65, w:220, h:20},
+  {x:1230, y:H*0.58, w:150, h:20},
+  {x:1450, y:H*0.65, w:250, h:20},
+  {x:1780, y:H*0.60, w:180, h:20},
+  {x:2030, y:H*0.65, w:200, h:20},
+  {x:2300, y:H*0.55, w:160, h:20},
+  {x:2530, y:H*0.65, w:200, h:20},
+  {x:2800, y:H*0.58, w:180, h:20},
+  {x:3050, y:H*0.65, w:250, h:20},
+  {x:3380, y:H*0.55, w:160, h:20},
+  {x:3610, y:H*0.65, w:200, h:20},
+  {x:3880, y:H*0.60, w:180, h:20},
+  {x:4130, y:H*0.65, w:220, h:20},
+  {x:4420, y:H*0.55, w:160, h:20},
+  {x:4650, y:H*0.65, w:200, h:20},
+  {x:4920, y:H*0.58, w:180, h:20},
+  {x:5200, y:H*0.65, w:350, h:20},
+  {x:5700, y:H*0.65, w:300, h:20},
+];
+
+// Destroyable barriers
+let barriers = [
+  {x:640, y:H*0.65-60, w:18, h:60, alive:true, hp:2},
+  {x:1120, y:H*0.65-80, w:18, h:80, alive:true, hp:2},
+  {x:1680, y:H*0.65-60, w:18, h:60, alive:true, hp:2},
+  {x:2450, y:H*0.65-70, w:18, h:70, alive:true, hp:2},
+  {x:2990, y:H*0.65-60, w:18, h:60, alive:true, hp:2},
+  {x:3560, y:H*0.65-80, w:18, h:80, alive:true, hp:2},
+  {x:4100, y:H*0.65-60, w:18, h:60, alive:true, hp:2},
+  {x:4600, y:H*0.65-70, w:18, h:70, alive:true, hp:2},
+  {x:5150, y:H*0.65-60, w:18, h:60, alive:true, hp:2},
+];
+
+// Enemies
+let enemies = [];
+function spawnEnemies() {
+  const positions = [500,900,1400,1850,2200,2650,3100,3500,3900,4250,4700,5000,5400];
+  positions.forEach(px => {
+    enemies.push({x:px, y:0, w:22, h:32, alive:true, hp:2, shootTimer:Math.random()*120, bullet:null, hitFlash:0});
+  });
+}
+spawnEnemies();
+
+// Bullets (player)
+let bullets = [];
+// Particles
+let particles = [];
+
+function addParticles(x, y, color, n) {
+  for(let i=0;i<n;i++) {
+    let a = Math.random()*Math.PI*2;
+    let spd = 1+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:30+Math.random()*20,color});
+  }
+}
+
+// Place enemies on platforms
+function placeOnPlatform(e) {
+  for(let p of platforms) {
+    if(e.x >= p.x && e.x <= p.x+p.w) {
+      e.y = p.y - e.h;
+      return;
+    }
+  }
+  e.y = H*0.65 - e.h;
+}
+enemies.forEach(placeOnPlatform);
+
+// Checkpoint
+const checkpoint = {x: WORLD_W - 200, y: 0, w: 40, h: 80};
+checkpoint.y = H*0.65 - checkpoint.h;
+
+// Input
+let keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if(e.code === 'Space') {
+    e.preventDefault();
+    if(runner.grounded && state==='playing') {
+      runner.vy = -14;
+      runner.grounded = false;
+    }
+  }
+  if((e.code==='KeyR') && state!=='playing') restartGame();
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+window.addEventListener('click', e => {
+  if(state!=='playing') { restartGame(); return; }
+  shoot();
+});
+
+function shoot() {
+  if(shootCooldown > 0) return;
+  shootCooldown = 8;
+  muzzleFlash = 6;
+  shakeX = (Math.random()-0.5)*8;
+  shakeY = (Math.random()-0.5)*4;
+  // Ray from center-bottom of screen (heli window) toward mouse in world coords
+  let sx = W*0.5, sy = H*0.85;
+  let dx = mouse.x - sx, dy = mouse.y - sy;
+  let dist = Math.sqrt(dx*dx+dy*dy);
+  bullets.push({
+    x: sx + scrollX, y: sy,
+    vx: (dx/dist)*30, vy: (dy/dist)*30,
+    alive: true
+  });
+}
+
+function getPlatformY(x) {
+  for(let p of platforms) {
+    if(x >= p.x && x <= p.x+p.w) return p.y;
+  }
+  return H*0.65;
+}
+
+function restartGame() {
+  state='playing';
+  runner = {x:200,y:0,vy:0,vx:2.2,w:22,h:32,hp:3,grounded:false,frame:0,frameTimer:0,dead:false,deadTimer:0,hitFlash:0};
+  runner.y = getPlatformY(runner.x) - runner.h;
+  scrollX=0;
+  bullets=[];
+  particles=[];
+  enemies=[];
+  barriers.forEach(b=>{b.alive=true;b.hp=2;});
+  spawnEnemies();
+  enemies.forEach(placeOnPlatform);
+  document.getElementById('msg').style.display='none';
+}
+
+function update() {
+  if(state!=='playing') return;
+
+  // Cooldowns
+  if(shootCooldown>0) shootCooldown--;
+  if(muzzleFlash>0) muzzleFlash--;
+  if(shakeX) shakeX*=0.8;
+  if(shakeY) shakeY*=0.8;
+
+  // Runner physics
+  runner.vy += 0.7; // gravity
+  runner.y += runner.vy;
+  runner.x += runner.vx;
+
+  // Runner platform collision
+  runner.grounded = false;
+  for(let p of platforms) {
+    if(runner.x+runner.w > p.x && runner.x < p.x+p.w) {
+      let bottom = runner.y + runner.h;
+      if(bottom > p.y && bottom < p.y+30 && runner.vy >= 0) {
+        runner.y = p.y - runner.h;
+        runner.vy = 0;
+        runner.grounded = true;
+      }
+    }
+  }
+
+  // Runner barrier collision
+  for(let b of barriers) {
+    if(!b.alive) continue;
+    if(runner.x+runner.w > b.x && runner.x < b.x+b.w &&
+       runner.y+runner.h > b.y && runner.y < b.y+b.h) {
+      runner.x = b.x - runner.w - 1;
+    }
+  }
+
+  // Runner fell
+  if(runner.y > H+100) {
+    runner.hp--;
+    runner.x = Math.max(150, scrollX+100);
+    runner.y = getPlatformY(runner.x) - runner.h;
+    runner.vy = 0;
+    if(runner.hp <= 0) { state='dead'; showMsg('💀 Runner Morreu!\nClique para recomeçar'); }
+  }
+
+  // Runner animation
+  runner.frameTimer++;
+  if(runner.frameTimer>8){runner.frame=(runner.frame+1)%4;runner.frameTimer=0;}
+  if(runner.hitFlash>0) runner.hitFlash--;
+
+  // Scroll follows runner (keep runner at ~30% from left)
+  let targetScroll = runner.x - W*0.3;
+  scrollX = Math.max(0, Math.min(targetScroll, WORLD_W - W));
+
+  // Check win
+  if(runner.x >= checkpoint.x) { state='win'; showMsg('🏆 Checkpoint!\nMissão Cumprida!\nClique para jogar de novo'); }
+
+  // Progress
+  document.getElementById('prog').textContent = Math.min(100,Math.round(runner.x/WORLD_W*100))+'%';
+  document.getElementById('hp').textContent = runner.hp;
+
+  // Bullets update
+  bullets.forEach(b => {
+    b.x += b.vx; b.y += b.vy;
+    if(b.y > H || b.y < 0 || b.x < 0 || b.x > WORLD_W) b.alive=false;
+
+    // Hit enemies
+    enemies.forEach(e => {
+      if(!e.alive || !b.alive) return;
+      let bsx = b.x - scrollX;
+      if(bsx > e.x-scrollX && bsx < e.x-scrollX+e.w && b.y > e.y && b.y < e.y+e.h) {
+        e.hp--;
+        e.hitFlash = 10;
+        b.alive=false;
+        addParticles(bsx, b.y, '#ff4444', 6);
+        if(e.hp<=0){e.alive=false;addParticles(bsx,b.y,'#ff8800',12);}
+      }
+    });
+
+    // Hit barriers
+    barriers.forEach(br => {
+      if(!br.alive || !b.alive) return;
+      let bsx = b.x - scrollX;
+      let brsx = br.x - scrollX;
+      if(bsx > brsx && bsx < brsx+br.w && b.y > br.y && b.y < br.y+br.h) {
+        br.hp--;
+        b.alive=false;
+        addParticles(bsx, b.y, '#ffcc00', 8);
+        if(br.hp<=0){br.alive=false;addParticles(brsx+br.w/2,br.y+br.h/2,'#ff6600',15);}
+      }
+    });
+  });
+  bullets = bullets.filter(b=>b.alive);
+
+  // Enemies logic
+  enemies.forEach(e => {
+    if(!e.alive) return;
+    if(e.hitFlash>0) e.hitFlash--;
+    e.shootTimer--;
+    let ex = e.x - scrollX;
+    // Only shoot if near runner
+    if(e.shootTimer<=0 && Math.abs(e.x - runner.x) < 400) {
+      e.shootTimer = 90 + Math.random()*60;
+      // Shoot at runner
+      let dx = (runner.x-scrollX) - ex, dy = runner.y - e.y;
+      let dist = Math.sqrt(dx*dx+dy*dy);
+      e.bullet = {x:ex+scrollX, y:e.y+e.h/2, vx:(dx/dist)*5, vy:(dy/dist)*5, alive:true};
+    }
+    // Move enemy bullet
+    if(e.bullet && e.bullet.alive) {
+      e.bullet.x += e.bullet.vx;
+      e.bullet.y += e.bullet.vy;
+      // Hit runner
+      let bsx = e.bullet.x - scrollX;
+      if(bsx > runner.x-scrollX && bsx < runner.x-scrollX+runner.w &&
+         e.bullet.y > runner.y && e.bullet.y < runner.y+runner.h) {
+        runner.hp--;
+        runner.hitFlash=20;
+        e.bullet.alive=false;
+        addParticles(runner.x-scrollX, runner.y+runner.h/2, '#ff0000', 8);
+        if(runner.hp<=0){state='dead';showMsg('💀 Runner Morreu!\nClique para recomeçar');}
+      }
+      if(e.bullet.y>H||e.bullet.y<0) e.bullet.alive=false;
+    }
+  });
+
+  // Particles
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;p.life--;});
+  particles=particles.filter(p=>p.life>0);
+}
+
+function showMsg(txt) {
+  let m = document.getElementById('msg');
+  m.innerText = txt;
+  m.style.display='block';
+}
+
+function drawBackground() {
+  // Sky gradient
+  let grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#0a0a1a');
+  grad.addColorStop(0.5,'#1a1a3e');
+  grad.addColorStop(1,'#2a1a1a');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,H);
+
+  // Distant mountains
+  ctx.fillStyle='rgba(30,30,60,0.8)';
+  let parallax = scrollX*0.15;
+  for(let i=0;i<8;i++){
+    let mx=(i*350-parallax%350+W)%W - 100;
+    ctx.beginPath();
+    ctx.moveTo(mx,H*0.7);
+    ctx.lineTo(mx+180,H*0.4);
+    ctx.lineTo(mx+350,H*0.7);
+    ctx.fill();
+  }
+
+  // Stars
+  ctx.fillStyle='rgba(255,255,255,0.6)';
+  let starSeed = 42;
+  for(let i=0;i<80;i++){
+    starSeed=(starSeed*1664525+1013904223)&0xffffffff;
+    let sx=((starSeed>>>0)%W);
+    let sy=((((starSeed*6364136223846793005n+1442695040888963407n)&0xffffffffn)|0n)+2147483648n)%BigInt(Math.round(H*0.45));
+    ctx.fillRect(sx,Number(sy),1,1);
+  }
+}
+
+function drawPlatforms() {
+  platforms.forEach(p => {
+    let px = p.x - scrollX;
+    if(px+p.w < -50 || px > W+50) return;
+    ctx.fillStyle='#4a3a2a';
+    ctx.fillRect(px,p.y,p.w,p.h);
+    ctx.fillStyle='#6a5a3a';
+    ctx.fillRect(px,p.y,p.w,4);
+    // Grass
+    ctx.fillStyle='#3a6a2a';
+    ctx.fillRect(px,p.y,p.w,3);
+  });
+}
+
+function drawBarriers() {
+  barriers.forEach(b => {
+    if(!b.alive) return;
+    let bx = b.x - scrollX;
+    ctx.fillStyle='#8b4513';
+    ctx.fillRect(bx,b.y,b.w,b.h);
+    ctx.fillStyle='#a0522d';
+    ctx.fillRect(bx+2,b.y,4,b.h);
+    // HP indicator
+    if(b.hp==1){ctx.fillStyle='rgba(255,100,0,0.7)';ctx.fillRect(bx,b.y,b.w,3);}
+  });
+}
+
+function drawRunner() {
+  let rx = runner.x - scrollX;
+  let ry = runner.y;
+  ctx.save();
+
+  if(runner.hitFlash>0 && Math.floor(runner.hitFlash/3)%2===0) {
+    ctx.globalAlpha=0.4;
+  }
+
+  // Body
+  ctx.fillStyle='#4488ff';
+  ctx.fillRect(rx, ry+12, runner.w, runner.h-12);
+
+  // Head
+  ctx.fillStyle='#ffcc88';
+  ctx.fillRect(rx+4, ry, runner.w-8, 14);
+
+  // Helmet
+  ctx.fillStyle='#223388';
+  ctx.fillRect(rx+2, ry-2, runner.w-4, 8);
+
+  // Run animation legs
+  let legOff = Math.sin(runner.frame*1.5)*5;
+  if(runner.grounded) {
+    ctx.fillStyle='#223388';
+    ctx.fillRect(rx+2, ry+runner.h-10, 7, 10+legOff);
+    ctx.fillRect(rx+runner.w-9, ry+runner.h-10, 7, 10-legOff);
+  }
+
+  // Backpack
+  ctx.fillStyle='#335544';
+  ctx.fillRect(rx-6, ry+10, 8, 14);
+
+  ctx.restore();
+}
+
+function drawEnemies() {
+  enemies.forEach(e => {
+    if(!e.alive) return;
+    let ex = e.x - scrollX;
+    if(ex < -50 || ex > W+50) return;
+
+    ctx.save();
+    if(e.hitFlash>0 && Math.floor(e.hitFlash/2)%2===0) ctx.globalAlpha=0.3;
+
+    // Body
+    ctx.fillStyle='#aa2222';
+    ctx.fillRect(ex, e.y+12, e.w, e.h-12);
+    // Head
+    ctx.fillStyle='#cc8866';
+    ctx.fillRect(ex+4, e.y, e.w-8, 14);
+    // Helmet
+    ctx.fillStyle='#661111';
+    ctx.fillRect(ex+2, e.y-2, e.w-4, 8);
+    // Gun
+    ctx.fillStyle='#333';
+    ctx.fillRect(ex-8, e.y+16, 12, 4);
+
+    // Enemy bullet
+    if(e.bullet && e.bullet.alive) {
+      let bx = e.bullet.x - scrollX;
+      ctx.fillStyle='#ff4444';
+      ctx.beginPath();
+      ctx.arc(bx, e.bullet.y, 4, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  });
+}
+
+function drawCheckpoint() {
+  let cx = checkpoint.x - scrollX;
+  if(cx > W+100 || cx < -100) return;
+  // Flag pole
+  ctx.fillStyle='#888';
+  ctx.fillRect(cx+18,checkpoint.y,4,checkpoint.h);
+  // Flag
+  ctx.fillStyle='#22cc44';
+  ctx.beginPath();
+  ctx.moveTo(cx+22, checkpoint.y);
+  ctx.lineTo(cx+50, checkpoint.y+15);
+  ctx.lineTo(cx+22, checkpoint.y+30);
+  ctx.fill();
+  // Base
+  ctx.fillStyle='#555';
+  ctx.fillRect(cx, checkpoint.y+checkpoint.h-10, 40, 10);
+  // CHECKPOINT text
+  ctx.fillStyle='#fff';
+  ctx.font='bold 11px monospace';
+  ctx.fillText('CHECKPOINT', cx-5, checkpoint.y-5);
+}
+
+function drawHelicopterView() {
+  // Window frame - immersive heli cockpit
+  let cx = W/2, cy = H;
+  // Dark vignette
+  let vign = ctx.createRadialGradient(cx,cy,H*0.3,cx,cy,H*1.0);
+  vign.addColorStop(0,'rgba(0,0,0,0)');
+  vign.addColorStop(1,'rgba(0,0,0,0.85)');
+  ctx.fillStyle=vign;
+  ctx.fillRect(0,0,W,H);
+
+  // Cockpit frame (bottom portion)
+  ctx.fillStyle='#1a1a1a';
+  ctx.fillRect(0,H*0.9,W,H*0.1);
+  ctx.fillStyle='#2a2a2a';
+  ctx.fillRect(0,H*0.88,W,6);
+
+  // Window oval shape - clip
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(cx, H*1.2, W*0.48, H*0.75, 0, 0, Math.PI*2);
+  ctx.strokeStyle='#333';
+  ctx.lineWidth=20;
+  ctx.stroke();
+
+  // Crosshair wires
+  ctx.strokeStyle='rgba(80,80,80,0.4)';
+  ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,H*0.5);ctx.lineTo(W,H*0.5);ctx.stroke();
+
+  // Instruments (decorative)
+  ctx.fillStyle='rgba(0,30,50,0.8)';
+  ctx.fillRect(20,H-90,80,70);
+  ctx.fillRect(W-100,H-90,80,70);
+  ctx.strokeStyle='rgba(0,200,255,0.3)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(20,H-90,80,70);
+  ctx.strokeRect(W-100,H-90,80,70);
+  ctx.fillStyle='rgba(0,200,255,0.5)';
+  ctx.font='9px monospace';
+  ctx.fillText('ALT: 850m',28,H-70);
+  ctx.fillText('SPD: 120',28,H-55);
+  ctx.fillText('HDG: 090°',W-93,H-70);
+  ctx.fillText('FUEL: 84%',W-93,H-55);
+  ctx.restore();
+
+  // Sniper scope overlay
+  let mx = mouse.x, my = mouse.y;
+
+  // Scope circle
+  ctx.save();
+  ctx.strokeStyle='rgba(0,255,100,0.8)';
+  ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.arc(mx,my,36,0,Math.PI*2);
+  ctx.stroke();
+
+  // Inner circle
+  ctx.beginPath();
+  ctx.arc(mx,my,4,0,Math.PI*2);
+  ctx.stroke();
+
+  // Crosshair lines
+  ctx.beginPath();
+  ctx.moveTo(mx-60,my);ctx.lineTo(mx-40,my);
+  ctx.moveTo(mx+40,my);ctx.lineTo(mx+60,my);
+  ctx.moveTo(mx,my-60);ctx.lineTo(mx,my-40);
+  ctx.moveTo(mx,my+40);ctx.lineTo(mx,my+60);
+  ctx.stroke();
+
+  // Range marks
+  for(let i=-3;i<=3;i++) {
+    if(i===0) continue;
+    ctx.beginPath();
+    ctx.moveTo(mx+i*10,my-3);ctx.lineTo(mx+i*10,my+3);
+    ctx.stroke();
+  }
+
+  // Muzzle flash
+  if(muzzleFlash>0) {
+    ctx.fillStyle=`rgba(255,200,50,${muzzleFlash/6*0.9})`;
+    ctx.beginPath();
+    ctx.arc(W*0.5, H*0.9, 20+muzzleFlash*3, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBullets() {
+  bullets.forEach(b => {
+    let bx = b.x - scrollX;
+    ctx.fillStyle='#ffff44';
+    ctx.shadowColor='#ffaa00';
+    ctx.shadowBlur=8;
+    ctx.beginPath();
+    ctx.arc(bx, b.y, 3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur=0;
+  });
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha=p.life/50;
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x-2,p.y-2,4,4);
+  });
+  ctx.globalAlpha=1;
+}
+
+function draw() {
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  drawBackground();
+  drawPlatforms();
+  drawBarriers();
+  drawCheckpoint();
+  drawRunner();
+  drawEnemies();
+  drawBullets();
+  drawParticles();
+  drawHelicopterView();
+
+  ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Init runner position
+runner.y = getPlatformY(runner.x) - runner.h;
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+html
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dev Club login</title>
+    <!-- Link para a biblioteca de ícones mencionada no vídeo -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="container">
+        <form action="">
+            <h1>login Dev Club</h1>
+            
+            <div class="input-box">
+                <!-- O tipo e-mail habilita o preenchimento automático [5, 6] -->
+                <input type="email" placeholder="usuário" required>
+                <i class='bx bxs-user'></i>
+            </div>
+            
+            <div class="input-box">
+                <!-- O tipo password esconde os caracteres digitados [5, 6] -->
+                <input type="password" placeholder="senha" required>
+                <i class='bx bxs-lock-alt'></i>
+            </div>
+            
+            <div class="remember-forgot">
+                <label>
+                    <input type="checkbox"> Lembrar senha
+                </label>
+                <a href="#">esqueci a senha</a>
+            </div>
+            
+            <button type="submit" class="login">login</button>
+            
+            <div class="register-link">
+                <p>não tem uma conta <a href="#">cadastre-se</a></p>
+            </div>
+        </form>
+    </main>
+</body>
+</html>

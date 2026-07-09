@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Links Externos</title>
+</head>
+
+<body>
+
+    <h1>Usando Links externos</h1>
+    <p>Você pode acessar o Google <a href="https://www.google.com/
+    ">clicando aqui.</a><strong>(Mas vai sair do meu site)</strong></p>
+
+    <p>Você pode acessar o Google <a href="https://www.google.com/
+    " target="_blank" rel="externos">clicando aqui.</a><u>Sem sair do meu site</u></p>
+
+    <h2>O código ficou assim:</h2>
+    <pre><code>
+    &lt;p&gt;Você pode acessar o Google&lt;a href="https://www.google.com/"&gt;clicando aqui.
+    &lt;/a&gt;&lt;strong&gt;(Mas vai sair do meu site)&lt;/strong&gt;&lt;/p&gt;
+
+    &lt;p&gt;Você pode acessar o Google&lt;a href="https://www.google.com/" 
+    <mark>target="_blank"</mark>rel="external"&gt;clicando aqui.&lt;/a&gt;&lt;u&gt;Sem sair do meu site&lt;/u&gt;
+    &lt;/p&gt;
+
+    </code></pre>
+
+    <hr>
+
+    <h2>Links para dowload:</h2>
+    <ul>
+        <li><a href="livro/FUNDAMENTOS-DA-MATEMATICA.pdf" download="FUNDAMENTOS-DA-MATEMATICA" type="application/pdf">Baixar Livro em PDF;</a></li>
+        <li><a href="#">Livro compactado em ZIP;</a></li>
+    </ul>
+
+    <h4>Por que usar o type: <br></h4>
+    <p>Ele ajuda o navegador a entender:</p> 
+    <ul>
+        <li>qual formato está senod enviado;</li>
+        <li>como tratar o arquivo;</li>
+        <li>qual aplicativo pode abrir;</li>
+        <li>como lidar com cache e compatibilidade;</li>
+
+    </ul>
+
+    <h3>O código ficou assim:</h3>
+    <pre><code>
+    &lt;ul&gt;
+    &lt;li&gt;&lt;a href="livro/FUNDAMENTOS-DA-MATEMATICA.pdf"
+    download="FUNDAMENTOS-DA-MATEMATICA"
+    type="application/pdf"&gt;Baixar Livro em PDF&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+    </code></pre>
+
+    <hr>
+    
+    <h2>Usando Links Internos</h2>
+    <P>Essa é a primeira página do projeto. Para acessar a segunda, basta clicar <a href="page.html" rel="next">aqui</a>.</P>
+
+    <h3>O código ficou assim:</h3>
+    <pre><code>
+        &lt;p&gt;Essa é a primeira página do projeto.
+        Para acessar a segunda, basta clicar&lt;a href="page.html" rel="next"&gt;
+        aqui&lt;/a&gt;.&lt;/p&gt;
+    </code></pre>
+
+    <P>Você pode acessar também nossa página de <a href="noticias/page03.html">notícias</a></P>
+
+    <h3>O código ficou assim:</h3>
+    <pre><code>
+        &lt;p&gt;Você pode acessar também nossa página de&lt;a href="noticias/page03.html"&gt;
+        notícias&lt;/a&gt;&lt;/p&gt;
+    </code></pre>
+
+
+
+
+</body>
+
+</html>
